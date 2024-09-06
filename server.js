@@ -18,6 +18,8 @@ mongoose.connect(uri)
 
 const wss = new WebSocket.Server({ port: 8080 });
 
+// Store connected WebSocket clients with unique IDs
+const clients = new Map();
 
 // Handle new WebSocket connections
 wss.on('connection', (ws) => {
@@ -36,15 +38,15 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ message: 'Client ID received', clientId }));
 
         // Handle further messages from this client
-        ws.on('message', (message) => {
-          const { targetClientId, data } = JSON.parse(message);
+        // ws.on('message', (message) => {
+        //   const { targetClientId, data } = JSON.parse(message);
 
-          // Forward the message to the target client
-          const targetClient = clients.get(targetClientId);
-          if (targetClient && targetClient.readyState === WebSocket.OPEN) {
-            targetClient.send(JSON.stringify(data));
-          }
-        });
+        //   // Forward the message to the target client
+        //   const targetClient = clients.get(targetClientId);
+        //   if (targetClient && targetClient.readyState === WebSocket.OPEN) {
+        //     targetClient.send(JSON.stringify(data));
+        //   }
+        // });
 
         // Handle client disconnect
         ws.on('close', () => {
@@ -62,17 +64,34 @@ wss.on('connection', (ws) => {
 
 // API routes
 
-
 app.post('/pickup', async (req, res) => {
-    const {  name, address, pickupDate,instructions } = req.body;
-    const pickup = new PickUp({ name, address, pickupDate,instructions });
-  
+    const {  runner,data } = req.body;
+    const { name, address, pickupDate,instructions } = data;
+    const pickup = new PickUp({ name, address, pickupDate,instructions,runner });
+
+      // Find the target client by ID
+  const targetClient = clients.get(runner);
+
+
+  if (targetClient && targetClient.readyState === WebSocket.OPEN) {
+    // Send data to the target client
+    targetClient.send(JSON.stringify(data));
+    // res.status(200).json({ message: `Data sent to client with ID: ${runner}` });
+
     try {
       const newpickup = await pickup.save();
       res.status(201).json(newpickup);
     } catch (err) {
       res.status(400).json({ message: err.message });
     }
+
+
+
+  } else {
+    res.status(404).json({ message: `Client with ID: ${runner} not found or not connected` });
+  }
+  
+ 
   });
 
 // Start the server
